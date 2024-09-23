@@ -6,18 +6,18 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/joho/godotenv"
 )
 
 type model struct {
 	viewport    viewport.Model
-	cityName    []string
+	cityData    string
 	textarea    textarea.Model
 	senderStyle lipgloss.Style
 	err         error
@@ -32,7 +32,42 @@ type Location struct {
 	State      string            `json:"state"`
 }
 
+type Weather struct {
+	Main struct {
+		CurrentTemp   float32 `json:"temp"`
+		FeelsLikeTemp float32 `json:"feels_like"`
+		MaxTemp       float32 `json:"temp_max"`
+		MinTemp       float32 `json:"temp_min"`
+		Humidity      int     `json:"humidity"`
+		Pressure      int     `json:"pressure"`
+	} `json:"main"`
+	DescArray []struct {
+		Description string `json:"description"`
+	} `json:"weather"`
+}
+
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		fmt.Println("Error loading .env file")
+	}
+
+	// weatherForecast := getWeatherForecast("New York")
+	// var weather Weather
+	// err = json.Unmarshal([]byte(weatherForecast), &weather)
+	// if err != nil {
+	// 	fmt.Println("Could not unmarshal data")
+	// }
+	// fmt.Printf("Current Temperature:        %.2f\n", weather.Main.CurrentTemp)
+	// fmt.Printf("Feels Like:                 %.2f\n", weather.Main.FeelsLikeTemp)
+	// if len(weather.DescArray) != 0 {
+	// 	fmt.Printf("Description:                %s\n", weather.DescArray[0].Description)
+	// }
+	// fmt.Printf("Maximum Temperature:        %.2f\n", weather.Main.MaxTemp)
+	// fmt.Printf("Minimum Temperature:        %.2f\n", weather.Main.MinTemp)
+	// fmt.Printf("Humidity:                   %d\n", weather.Main.Humidity)
+	// fmt.Printf("Pressure:                   %d\n", weather.Main.Pressure)
+
 	p := tea.NewProgram(initialModel())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Oof: %v\n", err)
@@ -40,7 +75,7 @@ func main() {
 }
 
 func getWeatherForecast(cityName string) string {
-	apikey := "provided in .env"
+	apikey := os.Getenv("WEATHER_APIKEY")
 	urlLocation := "http://api.openweathermap.org/geo/1.0/direct?q=" + cityName + "&limit=1&appid=" + apikey
 
 	res, err := http.Get(urlLocation)
@@ -78,7 +113,6 @@ func getWeatherForecast(cityName string) string {
 	if err != nil {
 		return "Error reading response body:"
 	}
-
 	return string(body)
 }
 
@@ -104,7 +138,7 @@ func initialModel() model {
 
 	return model{
 		textarea:    ta,
-		cityName:    []string{},
+		cityData:    "",
 		viewport:    vp,
 		senderStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("5")),
 		err:         nil,
@@ -120,6 +154,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		m.viewport.Width = msg.Width
+		m.viewport.Height = msg.Height - 6
 		m.textarea.SetWidth(msg.Width)
 		return m, nil
 
@@ -134,11 +169,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			v := m.textarea.Value()
 
 			weatherForecast := getWeatherForecast(v)
-			formattedData := fmt.Sprintf("\n%s", weatherForecast)
+			// formattedData := fmt.Sprintf("\n%s", weatherForecast)
+			formattedData := WeatherFormatting(weatherForecast)
 
-			m.cityName = append(m.cityName, m.senderStyle.Render("You: ")+v+formattedData)
+			m.cityData = m.senderStyle.Render("You: ") + v + "\n" + formattedData
 
-			m.viewport.SetContent(strings.Join(m.cityName, "\n"))
+			m.viewport.SetContent(m.cityData + "\n")
 			m.textarea.Reset()
 			m.viewport.GotoBottom()
 			return m, nil
@@ -167,4 +203,24 @@ func (m model) View() string {
 		m.viewport.View(),
 		m.textarea.View(),
 	) + "\n\n"
+}
+
+func WeatherFormatting(weatherForecast string) string {
+	var weather Weather
+	err := json.Unmarshal([]byte(weatherForecast), &weather)
+	if err != nil {
+		fmt.Println("Could not unmarshal data")
+	}
+
+	returndata := fmt.Sprintf("Current Temperature:        %.2f\n", weather.Main.CurrentTemp)
+	returndata = returndata + fmt.Sprintf("Feels Like:                 %.2f\n", weather.Main.FeelsLikeTemp)
+	if len(weather.DescArray) != 0 {
+		returndata = returndata + fmt.Sprintf("Description:                %s\n", weather.DescArray[0].Description)
+	}
+	returndata = returndata + fmt.Sprintf("Maximum Temperature:        %.2f\n", weather.Main.MaxTemp)
+	returndata = returndata + fmt.Sprintf("Minimum Temperature:        %.2f\n", weather.Main.MinTemp)
+	returndata = returndata + fmt.Sprintf("Humidity:                   %d\n", weather.Main.Humidity)
+	returndata = returndata + fmt.Sprintf("Pressure:                   %d\n", weather.Main.Pressure)
+
+	return returndata
 }
