@@ -3,14 +3,16 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"strings"
+
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"io"
-	"net/http"
-	"strings"
 )
 
 type model struct {
@@ -31,13 +33,10 @@ type Location struct {
 }
 
 func main() {
-	//p := tea.NewProgram(initialModel())
-	//if _, err := p.Run(); err != nil {
-	//	fmt.Fprintf(os.Stderr, "Oof: %v\n", err)
-	//}
-
-	fmt.Println(getWeatherForecast("Raipur"))
-
+	p := tea.NewProgram(initialModel())
+	if _, err := p.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Oof: %v\n", err)
+	}
 }
 
 func getWeatherForecast(cityName string) string {
@@ -50,7 +49,11 @@ func getWeatherForecast(cityName string) string {
 	}
 	defer res.Body.Close()
 
-	body, err := io.ReadAll(res.Body)
+	body, _ := io.ReadAll(res.Body)
+
+	if res.StatusCode != http.StatusOK {
+		return fmt.Sprintf("Error: received status code %d", res.StatusCode)
+	}
 
 	var locations []Location
 	err = json.Unmarshal(body, &locations)
@@ -61,24 +64,18 @@ func getWeatherForecast(cityName string) string {
 	lat := locations[0].Lat
 	lon := locations[0].Lon
 
-	//for _, location := range locations {
-	//	fmt.Printf("Name: %s, Lat: %.6f, Lon: %.6f\n", location.Name, location.Lat, location.Lon)
-	//}
-
 	urlWeather := "https://api.openweathermap.org/data/2.5/weather?lat=" +
 		fmt.Sprintf("%.5f", lat) + "&lon=" +
 		fmt.Sprintf("%.5f", lon) + "&appid=" + apikey
 
 	res, err = http.Get(urlWeather)
 	if err != nil {
-		//fmt.Println("Error fetching URL:", err)
 		return "Could not fetch Weather Forecast"
 	}
 	defer res.Body.Close()
 
 	body, err = io.ReadAll(res.Body)
 	if err != nil {
-		//fmt.Println("Error reading response body:", err)
 		return "Error reading response body:"
 	}
 
@@ -96,12 +93,11 @@ func initialModel() model {
 	ta.SetWidth(30)
 	ta.SetHeight(1)
 
-	// Remove cursor line styling
 	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
 
 	ta.ShowLineNumbers = false
 
-	vp := viewport.New(30, 5)
+	vp := viewport.New(20, 10)
 	vp.SetContent(`Welcome to the weather forecast!`)
 
 	ta.KeyMap.InsertNewline.SetEnabled(false)
@@ -137,19 +133,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			v := m.textarea.Value()
 
-			if v == "" {
-				// Don't send empty messages.
-				return m, nil
-			}
+			weatherForecast := getWeatherForecast(v)
+			formattedData := fmt.Sprintf("\n%s", weatherForecast)
 
-			weatherForecast := getWeatherForecast(m.cityName[0])
+			m.cityName = append(m.cityName, m.senderStyle.Render("You: ")+v+formattedData)
 
-			m.cityName = append(m.cityName, m.senderStyle.Render("You: ")+v)
-			m.viewport.SetContent(strings.Join(m.cityName, "\n") +
-				weatherForecast)
+			m.viewport.SetContent(strings.Join(m.cityName, "\n"))
 			m.textarea.Reset()
 			m.viewport.GotoBottom()
-
 			return m, nil
 
 		default:
