@@ -172,7 +172,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// formattedData := fmt.Sprintf("\n%s", weatherForecast)
 			formattedData := WeatherFormatting(weatherForecast)
 
-			m.cityData = m.senderStyle.Render("You: ") + v + "\n" + formattedData
+			m.cityData = m.senderStyle.Render("\nYou: ") + v + "\n" + formattedData
 
 			m.viewport.SetContent(m.cityData + "\n")
 			m.textarea.Reset()
@@ -209,18 +209,50 @@ func WeatherFormatting(weatherForecast string) string {
 	var weather Weather
 	err := json.Unmarshal([]byte(weatherForecast), &weather)
 	if err != nil {
-		fmt.Println("Could not unmarshal data")
+		return "Could not unmarshal data"
 	}
 
-	returndata := fmt.Sprintf("Current Temperature:        %.2f\n", weather.Main.CurrentTemp)
-	returndata = returndata + fmt.Sprintf("Feels Like:                 %.2f\n", weather.Main.FeelsLikeTemp)
+	var (
+		titleStyle = lipgloss.NewStyle().Bold(false).Foreground(lipgloss.Color("105"))
+		// subtitleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("66"))
+		valueStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("83"))
+		// highlightStyle = lipgloss.NewStyle().Background(lipgloss.Color("240")).Foreground(lipgloss.Color("white"))
+	)
+
+	returndata := fmt.Sprintf("%s%.2f %s\n",
+		titleStyle.Render("Current Temperature:             "),
+		weather.Main.CurrentTemp,
+		valueStyle.Render("°C"))
+
+	returndata += fmt.Sprintf("%s     %.2f %s\n",
+		titleStyle.Render("Feels Like:                 "),
+		weather.Main.CurrentTemp,
+		valueStyle.Render("°C"))
+
 	if len(weather.DescArray) != 0 {
-		returndata = returndata + fmt.Sprintf("Description:                %s\n", weather.DescArray[0].Description)
+		returndata += fmt.Sprintf("%s     %s\n",
+			titleStyle.Render("Description:                "),
+			weather.DescArray[0].Description)
 	}
-	returndata = returndata + fmt.Sprintf("Maximum Temperature:        %.2f\n", weather.Main.MaxTemp)
-	returndata = returndata + fmt.Sprintf("Minimum Temperature:        %.2f\n", weather.Main.MinTemp)
-	returndata = returndata + fmt.Sprintf("Humidity:                   %d\n", weather.Main.Humidity)
-	returndata = returndata + fmt.Sprintf("Pressure:                   %d\n", weather.Main.Pressure)
+	returndata += fmt.Sprintf("%s     %.2f %s\n",
+		titleStyle.Render("Maximum Temperature:        "),
+		weather.Main.CurrentTemp,
+		valueStyle.Render("°C"))
+
+	returndata += fmt.Sprintf("%s     %.2f %s\n",
+		titleStyle.Render("Minimum Temperature:        "),
+		weather.Main.CurrentTemp,
+		valueStyle.Render("°C"))
+
+	returndata += fmt.Sprintf("%s     %d %s\n",
+		titleStyle.Render("Humidity:                   "),
+		weather.Main.Humidity,
+		valueStyle.Render("    %"))
+
+	returndata += fmt.Sprintf("%s     %d %s\n",
+		titleStyle.Render("Pressure:                   "),
+		weather.Main.Humidity,
+		valueStyle.Render("    Pa"))
 
 	return returndata
 }
